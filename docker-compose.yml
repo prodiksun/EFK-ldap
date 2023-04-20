@@ -1,0 +1,81 @@
+version: '3'
+
+services:
+  fluentd:
+    build: ./fluentd
+    restart: always
+    volumes:
+      - ./fluentd/conf:/fluentd/etc
+      - /var/log:/var/log
+    links:
+      - "elasticsearch"
+    depends_on:
+      - elasticsearch
+    environment:
+      - TZ=Europe/Moscow
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+
+  elasticsearch:
+    image: elasticsearch:8.6.2
+    restart: always
+    expose:
+      - 9200
+    environment:
+      - discovery.type=single-node
+      - ELASTIC_PASSWORD=qwerty123
+      - xpack.license.self_generated.type=basic
+      - path.data=/usr/share/elasticsearch/data
+      - bootstrap.memory_lock=false
+      - "ES_JAVA_OPTS=-Xms4G -Xmx4G"
+      - xpack.security.enabled=false
+      - xpack.ml.enabled=false
+      - xpack.graph.enabled=false
+      - xpack.watcher.enabled=false
+      - xpack.security.enrollment.enabled=true
+      - TZ=Europe/Moscow
+    ports:
+      - "9200:9200"
+    volumes:
+      - /srv/docker/elasticsearch/data:/usr/share/elasticsearch/data
+
+  kibana:
+    image: kibana:8.6.2
+    restart: always
+    links:
+      - "elasticsearch"
+    # ports:
+    #   - "5601:5601"
+    depends_on:
+      - elasticsearch
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - TZ=Europe/Moscow
+    volumes:
+      - /srv/docker/kibana/data:/usr/share/kibana/data
+
+  ldap-auth:
+    build: ./ldap-auth
+    restart: always
+    depends_on:
+      - kibana
+    environment:
+      - TZ=Europe/Moscow
+    ports:
+      - "8888:8888"
+
+  nginx-ldap:
+    build: ./nginx-ldap
+    restart: always
+    links:
+      - "kibana"
+      - "ldap-auth"
+    depends_on:
+      - kibana
+      - ldap-auth
+    environment:
+      - TZ=Europe/Moscow
+    ports:
+      - "80:80"   
